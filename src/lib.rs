@@ -22,7 +22,7 @@ pub struct SizedText<Font> {
     pub font: Font,
 }
 #[derive(Clone, Debug)]
-enum NodeElement<Font> {
+pub enum NodeElement<Font> {
     Path(Path),
     Text(SizedText<Font>),
 }

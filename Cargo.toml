@@ -1,0 +1,8 @@
+[package]
+name = "tree-graph"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+tree-ds = {version = "0.1", features = ["auto_id"]}
+lyon = {version = "1.0"}

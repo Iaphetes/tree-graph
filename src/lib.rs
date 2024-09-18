@@ -46,9 +46,9 @@ where
     T: Clone,
     Font: Clone,
 {
-    position: Vec2,
+    pub position: Vec2,
     node_elements: Vec<NodeElement<Font>>,
-    node_links: Vec<T>,
+    pub node_links: Vec<T>,
     dimensions: Vec2,
 }
 fn layout_node<Q, T, Font>(

@@ -17,9 +17,9 @@ impl Vec2 {
 }
 #[derive(Clone, Debug)]
 pub struct SizedText<Font> {
-    content: String,
-    dimensions: Vec2,
-    font: Font,
+    pub content: String,
+    pub dimensions: Vec2,
+    pub font: Font,
 }
 #[derive(Clone, Debug)]
 enum NodeElement<Font> {
@@ -47,9 +47,9 @@ where
     Font: Clone,
 {
     pub position: Vec2,
-    node_elements: Vec<NodeElement<Font>>,
+    pub node_elements: Vec<NodeElement<Font>>,
     pub node_links: Vec<T>,
-    dimensions: Vec2,
+    pub dimensions: Vec2,
 }
 fn layout_node<Q, T, Font>(
     sub_tree_root: &Q,

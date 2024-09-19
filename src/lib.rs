@@ -30,7 +30,10 @@ pub struct Margins {
     pub inner_margins: Vec2,
     pub outer_margins: Vec2,
 }
-pub trait Graphable: Eq + Clone + Ord {
+pub trait Graphable<T>: Eq + Clone + Ord
+where
+    T: Clone,
+{
     fn set_text<Font>(
         &self,
         font: Font,
@@ -38,7 +41,7 @@ pub trait Graphable: Eq + Clone + Ord {
         max_height: Option<u32>,
         position: Vec2,
     ) -> Option<SizedText<Font>>;
-    fn get_links<T>(&self) -> Vec<T>;
+    fn get_links(&self) -> Vec<T>;
 }
 #[derive(Clone, Debug)]
 pub struct RenderedNode<T, Font>
@@ -51,7 +54,7 @@ where
     pub node_links: Vec<T>,
     pub dimensions: Vec2,
 }
-fn layout_node<Q, T, Font>(
+fn layout_node<Q, T, Font, I>(
     sub_tree_root: &Q,
     tree: &Tree<Q, T>,
     font: Font,
@@ -62,8 +65,9 @@ fn layout_node<Q, T, Font>(
 ) -> Result<(HashMap<Q, RenderedNode<T, Font>>, Vec2), String>
 where
     Q: Clone + Display + Eq + Hash + Ord,
-    T: Clone + Eq + Graphable,
+    T: Clone + Eq + Graphable<I>,
     Font: Clone,
+    I: Clone,
 {
     let mut node_list = tree
         .get_node_by_id(sub_tree_root)
@@ -141,14 +145,14 @@ where
     Ok((rendered_nodes, (dimensions)))
 }
 
-pub fn graph_layer_tree<Q, T, Font>(
+pub fn graph_layer_tree<Q, T, Font, I>(
     font: Font,
     tree: Tree<Q, T>,
     margins: &Margins,
     position: Vec2,
 ) -> Result<HashMap<Q, RenderedNode<T, Font>>, String>
 where
-    T: Clone + Eq + Graphable,
+    T: Clone + Eq + Graphable<I>,
     Q: Clone + Eq + Hash,
     Q: Ord,
     Q: std::fmt::Display,

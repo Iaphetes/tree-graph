@@ -1,7 +1,9 @@
+mod rendered_node;
 use lyon::{
     geom::{euclid::Point2D, Box2D, Point},
     path::{traits::Build, Builder, Path, Winding},
 };
+pub use rendered_node::{Margins, NodeElement, RenderedNode, SizedText};
 use std::{collections::HashMap, fmt::Display, hash::Hash};
 use tree_ds::prelude::Tree;
 #[derive(Clone, Debug)]
@@ -15,59 +17,41 @@ impl Vec2 {
         Self { x, y }
     }
 }
-#[derive(Clone, Debug)]
-pub struct SizedText<Font> {
-    pub content: String,
-    pub dimensions: Vec2,
-    pub font: Font,
-}
-#[derive(Clone, Debug)]
-pub enum NodeElement<Font> {
-    Path(Path),
-    Text(SizedText<Font>),
-}
-pub struct Margins {
-    pub inner_margins: Vec2,
-    pub outer_margins: Vec2,
-}
-pub trait Graphable<T>: Eq + Clone + Ord
-where
-    T: Clone,
+
+pub trait Graphable: Eq + Clone + Ord // T: Clone,
 {
-    fn set_text<Font>(
+    type ID: Clone;
+    type Font: Clone;
+    fn set_text(
         &self,
-        font: Font,
+        font: Self::Font,
         max_width: Option<u32>,
         max_height: Option<u32>,
         position: Vec2,
-    ) -> Option<SizedText<Font>>;
-    fn get_links(&self) -> Vec<T>;
+        size: f32,
+    ) -> Option<SizedText<Self::Font>>;
+    fn get_links(&self) -> Vec<Self::ID>;
 }
-#[derive(Clone, Debug)]
-pub struct RenderedNode<T, Font>
-where
-    T: Clone,
-    Font: Clone,
-{
-    pub position: Vec2,
-    pub node_elements: Vec<NodeElement<Font>>,
-    pub node_links: Vec<T>,
-    pub dimensions: Vec2,
-}
-fn layout_node<Q, T, Font, I>(
-    sub_tree_root: &Q,
-    tree: &Tree<Q, T>,
-    font: Font,
+fn layout_node<ID, Content>(
+    sub_tree_root: &ID,
+    tree: &Tree<ID, Content>,
+    font: <Content as Graphable>::Font,
     margins: &Margins,
     depth: u32,
     max_depth: Option<u32>,
     position: Vec2,
-) -> Result<(HashMap<Q, RenderedNode<T, Font>>, Vec2), String>
+    text_size: f32,
+) -> Result<
+    (
+        HashMap<ID, RenderedNode<ID, <Content as Graphable>::Font>>,
+        Vec2,
+    ),
+    String,
+>
 where
-    Q: Clone + Display + Eq + Hash + Ord,
-    T: Clone + Eq + Graphable<I>,
-    Font: Clone,
-    I: Clone,
+    ID: Clone + Display + Eq + Hash + Ord,
+    Content: Clone + Eq + Ord + Graphable<ID = ID>,
+    // <Content as Graphable>::T: Graphable,
 {
     let mut node_list = tree
         .get_node_by_id(sub_tree_root)
@@ -77,13 +61,13 @@ where
         position.x + margins.inner_margins.x,
         position.y + margins.inner_margins.y,
     );
-    let node_content: T = tree
+    let node_content: Content = tree
         .get_node_by_id(&sub_tree_root)
         .ok_or("Tree broken")?
         .get_value()
         .ok_or("Empty node")?;
     let sized_text = node_content
-        .set_text(font.clone(), None, None, text_position)
+        .set_text(font.clone(), None, None, text_position, text_size)
         .ok_or("Could not set text")?;
     // let (line_widths, paragraph_height) =
     //     text_dimensions(&text.content, font, text.size, LineHeight::Relative(1.25));
@@ -91,7 +75,8 @@ where
         x: sized_text.dimensions.x + margins.inner_margins.x * 2.0,
         y: sized_text.dimensions.y + margins.inner_margins.y * 2.0,
     };
-    let mut rendered_nodes: HashMap<Q, RenderedNode<T, Font>> = HashMap::new();
+    let mut rendered_nodes: HashMap<ID, RenderedNode<ID, <Content as Graphable>::Font>> =
+        HashMap::new();
     let mut rendered_node = RenderedNode {
         node_elements: vec![],
         dimensions: self_dimension,
@@ -113,6 +98,7 @@ where
                 x: subnode_position.x,
                 y: subnode_position.y,
             },
+            text_size,
         )?;
         rendered_nodes.extend(rendered_subnodes);
         subnode_position.y += subnode_dimensions.y + &margins.inner_margins.y;
@@ -145,21 +131,23 @@ where
     Ok((rendered_nodes, (dimensions)))
 }
 
-pub fn graph_layer_tree<Q, T, Font, I>(
-    font: Font,
-    tree: Tree<Q, T>,
+pub fn graph_layer_tree<ID, Content>(
+    font: <Content as Graphable>::Font,
+    tree: Tree<ID, Content>,
     margins: &Margins,
     position: Vec2,
-) -> Result<HashMap<Q, RenderedNode<T, Font>>, String>
+
+    text_size: f32,
+) -> Result<HashMap<ID, RenderedNode<ID, <Content as Graphable>::Font>>, String>
 where
-    T: Clone + Eq + Graphable<I>,
-    Q: Clone + Eq + Hash,
-    Q: Ord,
-    Q: std::fmt::Display,
-    Font: Clone,
+    Content: Clone + Eq + Graphable<ID = ID>,
+    ID: Clone + Eq + Hash,
+    ID: Ord,
+    ID: std::fmt::Display,
 {
     let root_layer = tree.get_root_node().ok_or("Empty tree".to_owned())?;
-    let mut rendered_nodes: HashMap<Q, RenderedNode<T, Font>> = HashMap::new();
+    let mut rendered_nodes: HashMap<ID, RenderedNode<ID, <Content as Graphable>::Font>> =
+        HashMap::new();
     let (rendered_subnodes, _) = layout_node(
         &root_layer.get_node_id(),
         &tree,
@@ -168,42 +156,8 @@ where
         0,
         None,
         position,
+        text_size,
     )?;
     rendered_nodes.extend(rendered_subnodes);
     Ok(rendered_nodes)
 }
-
-// fn character_width(character: char, _font: Font, size: Pixels) -> Pixels {
-//     size * 0.75
-// }
-// fn text_dimensions(text: &str, _font: Font, size: f32, line_height: f32) -> (Vec<Pixels>, Pixels) {
-//     let line_widths: Vec<Pixels> = text
-//         .split('\n')
-//         .map(|line| {
-//             let mut line_width: Pixels = Pixels(0.0);
-//             for character in line.chars() {
-//                 line_width.0 += character_width(character, _font, size).0
-//             }
-//             line_width
-//         })
-//         .collect();
-//     let height: Pixels = Pixels(
-//         line_widths.len() as f32
-//             * match line_height {
-//                 LineHeight::Relative(rel) => rel * size.0,
-//                 LineHeight::Absolute(pixels) => pixels.0,
-//             },
-//     );
-
-//     (line_widths, height)
-// }
-// #[cfg(test)]
-// mod tests {
-//     use super::*;
-
-//     #[test]
-//     fn it_works() {
-//         let result = add(2, 2);
-//         assert_eq!(result, 4);
-//     }
-// }

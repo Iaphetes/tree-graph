@@ -1,7 +1,7 @@
 mod rendered_node;
 use lyon::{
-    geom::{euclid::Point2D, Box2D, Point},
-    path::{traits::Build, Builder, Path, Winding},
+    geom::{euclid::Point2D, Box2D},
+    path::{Path, Winding},
 };
 pub use rendered_node::{Margins, NodeElement, RenderedNode, SizedText};
 use std::{collections::HashMap, fmt::Display, hash::Hash};
@@ -51,12 +51,12 @@ fn layout_node<ID, Content>(
 where
     ID: Clone + Display + Eq + Hash + Ord,
     Content: Clone + Eq + Ord + Graphable<ID = ID>,
-    // <Content as Graphable>::T: Graphable,
 {
     let mut node_list = tree
         .get_node_by_id(sub_tree_root)
         .ok_or("Node not found")?
-        .get_children_ids();
+        .get_children_ids()
+        .map_err(|err| format!("{:?}", err))?;
     let text_position = Vec2::new(
         position.x + margins.inner_margins.x,
         position.y + margins.inner_margins.y,
@@ -65,6 +65,7 @@ where
         .get_node_by_id(&sub_tree_root)
         .ok_or("Tree broken")?
         .get_value()
+        .map_err(|err| "Empty node")?
         .ok_or("Empty node")?;
     let sized_text = node_content
         .set_text(font.clone(), None, None, text_position, text_size)
@@ -87,7 +88,7 @@ where
     subnode_position.x += &margins.inner_margins.x;
     subnode_position.y += sized_text.dimensions.y + (&margins.inner_margins.y * 2.0);
     for node in node_list {
-        let (mut rendered_subnodes, subnode_dimensions) = layout_node(
+        let (mut rendered_subnodes, subnode_dimensions) = layout_node::<ID, Content>(
             &node,
             &tree,
             font.clone(),
@@ -140,16 +141,16 @@ pub fn graph_layer_tree<ID, Content>(
     text_size: f32,
 ) -> Result<HashMap<ID, RenderedNode<ID, <Content as Graphable>::Font>>, String>
 where
+    ID: Clone + Display + Eq + Hash + Ord,
     Content: Clone + Eq + Graphable<ID = ID>,
-    ID: Clone + Eq + Hash,
-    ID: Ord,
-    ID: std::fmt::Display,
 {
     let root_layer = tree.get_root_node().ok_or("Empty tree".to_owned())?;
     let mut rendered_nodes: HashMap<ID, RenderedNode<ID, <Content as Graphable>::Font>> =
         HashMap::new();
-    let (rendered_subnodes, _) = layout_node(
-        &root_layer.get_node_id(),
+    let (rendered_subnodes, _) = layout_node::<ID, Content>(
+        &root_layer
+            .get_node_id()
+            .map_err(|err| format!("{:?}", err))?,
         &tree,
         font,
         &margins,
